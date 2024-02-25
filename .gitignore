@@ -2,3 +2,5 @@ myenv/
 VIX.csv
 headlines.db
 headlines.rar
+*.pdf
+*.png

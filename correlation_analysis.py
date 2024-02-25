@@ -27,7 +27,10 @@ def calculate_correlation_and_plot(db_path, vix_csv_path):
 
     # Calculate daily percentage changes for VIX metrics
     for column in ["Open", "High", "Low", "Close", "Adj Close"]:
-        vix_df[f"{column.lower()}_change"] = vix_df[column].pct_change() * 100
+        vix_df[f"{column.lower().replace(' ', '_')}_change"] = vix_df[column].pct_change() * 100
+
+    # Debugging: Print columns after creating change columns
+    print(vix_df.columns)
 
     # Prepare Data - ensure all data frames use datetime and are aligned
     headlines_df["ydm"] = pd.to_datetime(headlines_df["ydm"])
@@ -35,8 +38,14 @@ def calculate_correlation_and_plot(db_path, vix_csv_path):
     # Merge WSJ headlines data with VIX on date
     data_merged = pd.merge(headlines_df, vix_df, left_on="ydm", right_on="Date")
 
-    # Drop rows with NaN values
-    data_merged.dropna(subset=["output"] + [f"{col}_change" for col in ["open", "high", "low", "close", "adj_close"]], inplace=True)
+    # Debugging: Print columns after merging
+    print(data_merged.columns)
+
+    # Ensure "adj_close_change" column exists before dropping NaN
+    if "adj_close_change" in data_merged.columns:
+        data_merged.dropna(subset=["output"] + [f"{col}_change" for col in ["open", "high", "low", "close", "adj_close"]], inplace=True)
+    else:
+        print("Error: 'adj_close_change' column not found")
 
     # Plotting and saving to PDF
     with PdfPages('vix_correlation_plots_enhanced.pdf') as pdf:
@@ -59,6 +68,11 @@ def calculate_correlation_and_plot(db_path, vix_csv_path):
             plt.grid(True)
             plt.legend()
             pdf.savefig()  # saves the current figure into a pdf page
+            
+            # Save the current figure as an image file
+            image_filename = f'vix_correlation_plot_{metric}.png'
+            plt.savefig(image_filename)
+
             plt.close()
 
 def main():

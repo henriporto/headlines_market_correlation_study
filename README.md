@@ -25,7 +25,7 @@ The project further involves a statistical analysis phase, where the generated i
 2. **Install Requirements:** Install the necessary Python packages to ensure the scripts run smoothly.
    
    ```bash
-   pip install -r requirements.txt
+   python -m pip install -r .\requirements.txt
    ```
    
 3. **Get Headlines from WSJ Archive and Insert in DB:** Fetch and store WSJ headlines in a database for analysis.
