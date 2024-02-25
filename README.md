@@ -57,4 +57,3 @@ Forget all previous instructions. You are now a financial expert analyzing the s
 ```
 
 This prompt is central to generating quantitative assessments of news impact, facilitating the correlation analysis with market data.
-```
