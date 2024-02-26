@@ -1,6 +1,6 @@
 myenv/
-VIX.csv
-headlines.db
-headlines.rar
+*.csv
+*.db
+*.rar
 *.pdf
 *.png
