@@ -19,20 +19,23 @@ parser.add_argument(
 parser.add_argument(
     "-c", "--calculate", action="store_true", help="Calculate Total Tokens and Price"
 )
+parser.add_argument(
+    "-t", "--test", action="store_true", help="Do a test"
+)
 args = parser.parse_args()
 
 ## TODO: organize with classes
 
 API_KEY = os.getenv("OPENAI_API_KEY")
-GPT_MODEL = "gpt-3.5-turbo"  # "gpt-4-0125-preview"
+GPT_MODEL = "gpt-4-0125-preview" # "gpt-3.5-turbo"
 STOCK_INDEX = "CBOE Volatility Index"
 TOKEN_COST_1_INPUT = Decimal("0.00001")  # Dollar
 TOKEN_COST_1_OUTPUT = Decimal("0.00003")
 GPT_RETRY_WRONG_OUTPUT_LIMIT = 1000
-DB = "headlines_only3.db"
+DB = "headlines.db"
 GPT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 GPT_REQUESTS_PER_MINUTE = 3
-getcontext().prec = 20
+getcontext().prec = 22
 request_counters = {
     "limit_requests": 60,
     "limit_tokens": 150000,
@@ -52,9 +55,9 @@ def convert_reset_time_to_seconds(time_str):
     pattern = r"(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?"
     match = re.search(pattern, time_str)
 
-    if match is None or match.group(0) == '':
+    if match is None or match.group(0) == "":
         return False
-    
+
     hours, minutes, seconds = match.groups(default="0")
     # Convert all to seconds and sum them up
     total_seconds = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
@@ -121,7 +124,9 @@ def wait_for_rate_limit_reset():
         time.sleep(wait_seconds)
 
 
-def log_retry_failure(retry_state): # Define a callback function for retry errors to log the details
+def log_retry_failure(
+    retry_state,
+):  # Define a callback function for retry errors to log the details
     if args.verbose:
         print("Em: ", "log_retry_failure")
     last_exception = retry_state.outcome.exception()
@@ -175,14 +180,16 @@ def fetch_completion(messages):
         wait_for_rate_limit_reset()
 
     json_response = attempt_fetch_completion(messages)
-    
+
     return json_response
 
 
 def make_request_with_rate_limit(messages):
     global rpm_next_time
 
-    rps = Decimal(GPT_REQUESTS_PER_MINUTE) / Decimal(60)  # Requests per second (RPM / 60)
+    rps = Decimal(GPT_REQUESTS_PER_MINUTE) / Decimal(
+        60
+    )  # Requests per second (RPM / 60)
     interval = Decimal(1) / rps  # Interval between requests
 
     if rpm_next_time == Decimal(0):
@@ -237,7 +244,7 @@ def num_tokens_from_string(string: str) -> int:
     return num_tokens
 
 
-def calculate_cost(input_message, output_text):
+def calculate_cost(input_message: list, output_text: str) -> Decimal:
     if args.verbose:
         print("Em: ", "calculate_cost")
     input_cost = num_tokens_from_messages(input_message) * TOKEN_COST_1_INPUT
@@ -279,8 +286,11 @@ def is_response_ok(completion):
             "error" in completion
             and "message" in completion["error"]
             and "Rate limit" in completion["error"]["message"]
-        ):            
-            time_raw = re.search(r"(?<=Please try again in ).*?(?=\. Visit)", completion["error"]["message"]).group(0)
+        ):
+            time_raw = re.search(
+                r"(?<=Please try again in ).*?(?=\. Visit)",
+                completion["error"]["message"],
+            ).group(0)
             if args.verbose:
                 print("is_response_ok(), time_raw: ", time_raw)
             match = convert_reset_time_to_seconds(time_raw)
@@ -302,7 +312,7 @@ def is_response_ok(completion):
 def main():
     cost = Decimal("0")
     done_count = 0
-    
+
     with sqlite3.connect(DB) as conn:
         cursor = conn.cursor()
         for id, year, month, headline in get_headlines_by_year(cursor):
@@ -315,7 +325,7 @@ def main():
                 completion = make_request_with_rate_limit(messages)
                 output_text, ok = is_response_ok(completion)
                 if not ok:
-                    continue # Continua o loop para tentar novamente
+                    continue  # Continua o loop para tentar novamente
                 try:
                     number = int(output_text)
                     if 1 <= number <= 100:
@@ -324,7 +334,9 @@ def main():
                         break
                     else:
                         if retry_count_wrong_output >= GPT_RETRY_WRONG_OUTPUT_LIMIT:
-                            print(f"O GPT_RETRY_WRONG_OUTPUT_LIMIT = {GPT_RETRY_WRONG_OUTPUT_LIMIT} foi atingido!\n")
+                            print(
+                                f"O GPT_RETRY_WRONG_OUTPUT_LIMIT = {GPT_RETRY_WRONG_OUTPUT_LIMIT} foi atingido!\n"
+                            )
                             break
                         raise ValueError
                 except ValueError:
@@ -342,5 +354,40 @@ def main():
             )
 
 
+def count_rows_in_headlines():
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM headlines")
+    rows_count = cur.fetchone()[0]
+    conn.close()
+    return rows_count
+
+
+def calculate_db_cost():
+    cost = Decimal("0")
+    tokens = 0
+    total_headlines = count_rows_in_headlines()
+    remaining_headlines = total_headlines
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        for id, year, month, headline in get_headlines_by_year(cursor):
+            input_text = f"Forget all previous instructions. You are now a financial expert analyzing the stock market in {month}/{year}. Upon receiving a news headline, assess its impact on {STOCK_INDEX} prices. Predict whether the headline suggests a rise or drop in prices by providing a number on a scale from 1 to 100, where 1 signifies a significant decrease, 100 signifies a significant increase, and 50 indicates uncertainty. Your response should be limited to this numerical prediction only, based on the given headline: {headline}"
+            cost += calculate_cost([{"role": "system", "content": input_text}], "100")
+            tokens += num_tokens_from_messages(
+                [{"role": "system", "content": headline}]
+            ) + num_tokens_from_string("100")
+            remaining_headlines -= 1
+            print(
+                f"\rtotal_headlines: '{total_headlines}', remaining_headlines: {remaining_headlines}, model: '{GPT_MODEL}', total_cost: '{cost}', total_tokens: '{tokens}'", end=''
+            )
+
+def test():
+    return
+
 if __name__ == "__main__":
-    main()
+    if args.calculate:
+        calculate_db_cost()
+    elif args.test:
+        test()
+    else:
+        main()
