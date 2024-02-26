@@ -3,6 +3,8 @@ requests
 beautifulsoup4
 tiktoken
 pandas
-scipy
 matplotlib
 tenacity
+fpdf
+numpy
+scipy

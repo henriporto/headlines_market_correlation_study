@@ -1,82 +1,108 @@
-import pandas as pd
 import sqlite3
-from scipy.stats import pearsonr, linregress
+import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+from fpdf import FPDF
+import numpy as np
+from scipy.stats import pearsonr
 
-DB = "headlines.db"
-VIX_CSV = "VIX.csv"
+# Database and CSV file paths
+DB_PATH = "headlines.db"
+VIX_CSV_PATH = "VIX.csv"
+BATCH_SIZE = 50000  # Process data in batches to manage memory
 
-def calculate_correlation_and_plot(db_path, vix_csv_path):
-    """
-    Calculate the Pearson correlation coefficient between WSJ headlines' impact scores
-    and various VIX index metrics. Generate enhanced plots of these relationships and save them as a PDF.
-    """
-    # Connect to SQLite database and load WSJ headlines data
-    conn = sqlite3.connect(db_path)
-    query = "SELECT ydm, output FROM headlines"
-    headlines_df = pd.read_sql_query(query, conn)
-    conn.close()
+def fetch_headline_scores(batch_size=BATCH_SIZE):
+    """Fetch headlines and their GPT output scores from the database in batches."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM headlines")
+        total_rows = cursor.fetchone()[0]
+        batches = total_rows // batch_size + (1 if total_rows % batch_size > 0 else 0)
+        
+        for batch in range(batches):
+            query = f"SELECT ydm, output FROM headlines LIMIT {batch_size} OFFSET {batch * batch_size}"
+            cursor.execute(query)
+            data = cursor.fetchall()
+            yield data
 
-    # Ensure 'output' is numeric
-    headlines_df["output"] = pd.to_numeric(headlines_df["output"], errors="coerce")
+def adjust_and_aggregate_scores():
+    """Adjust scores based on criteria and aggregate by day using batch processing."""
+    daily_scores = {}
+    for data_batch in fetch_headline_scores():
+        for date, output in data_batch:
+            try:
+                score = int(output)
+                adjusted_score = score - 50  # Adjusting score
+            except ValueError:
+                # If output is not an integer, ignore this record or log it as an error
+                continue
 
-    # Load VIX Index Data
-    vix_df = pd.read_csv(vix_csv_path)
-    vix_df["Date"] = pd.to_datetime(vix_df["Date"])
+            if date in daily_scores:
+                daily_scores[date] += adjusted_score
+            else:
+                daily_scores[date] = adjusted_score
+    return daily_scores
 
-    # Calculate daily percentage changes for VIX metrics
-    for column in ["Open", "High", "Low", "Close", "Adj Close"]:
-        vix_df[f"{column.lower().replace(' ', '_')}_change"] = vix_df[column].pct_change() * 100
+def read_vix_data():
+    """Read VIX index data from CSV."""
+    vix_data = pd.read_csv(VIX_CSV_PATH)
+    vix_data['Date'] = pd.to_datetime(vix_data['Date']).dt.date
+    return vix_data
 
-    # Debugging: Print columns after creating change columns
-    print(vix_df.columns)
+def correlate_data(daily_scores, vix_data):
+    """Correlate daily scores with VIX index data, ensuring only days with both scores and VIX data are included."""
+    scores_df = pd.DataFrame(list(daily_scores.items()), columns=['Date', 'Score'])
+    scores_df['Date'] = pd.to_datetime(scores_df['Date']).dt.date
+    
+    # Merging on 'Date' to ensure only days with both scores and VIX data are included
+    merged_data = pd.merge(vix_data, scores_df, on='Date', how='inner')
+    return merged_data
 
-    # Prepare Data - ensure all data frames use datetime and are aligned
-    headlines_df["ydm"] = pd.to_datetime(headlines_df["ydm"])
-
-    # Merge WSJ headlines data with VIX on date
-    data_merged = pd.merge(headlines_df, vix_df, left_on="ydm", right_on="Date")
-
-    # Debugging: Print columns after merging
-    print(data_merged.columns)
-
-    # Ensure "adj_close_change" column exists before dropping NaN
-    if "adj_close_change" in data_merged.columns:
-        data_merged.dropna(subset=["output"] + [f"{col}_change" for col in ["open", "high", "low", "close", "adj_close"]], inplace=True)
-    else:
-        print("Error: 'adj_close_change' column not found")
-
-    # Plotting and saving to PDF
-    with PdfPages('vix_correlation_plots_enhanced.pdf') as pdf:
-        for metric in ["open_change", "high_change", "low_change", "close_change", "adj_close_change"]:
-            # Calculate Pearson correlation coefficient and its p-value
-            correlation_coefficient, pearson_p_value = pearsonr(data_merged["output"], data_merged[metric])
-            
-            # Calculate linear regression for trend line and its p-value
-            slope, intercept, r_value, linreg_p_value, std_err = linregress(data_merged["output"], data_merged[metric])
-            
-            plt.figure(figsize=(10, 6))
-            plt.scatter(data_merged["output"], data_merged[metric], alpha=0.5, color='dodgerblue')
-            plt.plot(data_merged["output"], intercept + slope*data_merged["output"], 'r', label=f'y={slope:.2f}x+{intercept:.2f}')
-            
-            # Updated title to include both Pearson correlation p-value and linear regression p-value
-            plt.title(f'WSJ Impact vs. VIX {metric}\nCorrelation: {correlation_coefficient:.2f}, Pearson P-value: {pearson_p_value:.2e}, LinReg P-value: {linreg_p_value:.2e}')
-            
-            plt.xlabel('WSJ Impact Score')
-            plt.ylabel(f'VIX {metric.capitalize()} (%)')
-            plt.grid(True)
-            plt.legend()
-            pdf.savefig()  # saves the current figure into a pdf page
-            
-            # Save the current figure as an image file
-            image_filename = f'vix_correlation_plot_{metric}.png'
-            plt.savefig(image_filename)
-
-            plt.close()
+def generate_plots_and_reports(correlated_data):
+    """Generate scatter plot for daily scores vs. VIX Close data, including the correlation line, statistics, and hypothesis testing results."""
+    plt.figure(figsize=(10, 6))
+    
+    # Generating a scatter plot
+    plt.scatter(correlated_data['Score'], correlated_data['Close'], color='blue', label='Data Points')
+    plt.xlabel('Daily Score')
+    plt.ylabel('VIX Close')
+    
+    # Calculating the line of best fit
+    m, c = np.polyfit(correlated_data['Score'], correlated_data['Close'], 1)
+    
+    # Plotting the line of best fit
+    plt.plot(correlated_data['Score'], m*correlated_data['Score'] + c, 'r-', label=f'Fit Line: y={m:.2f}x+{c:.2f}')
+    
+    # Calculating Correlation Coefficient and p-value
+    correlation_coef, p_value = pearsonr(correlated_data['Score'], correlated_data['Close'])
+    
+    # Calculating R^2 (Coefficient of Determination)
+    r_squared = correlation_coef**2
+    
+    # Adding text with the correlation coefficient, p-value, and R^2 value to the plot
+    stats_text = f'Correlation Coefficient: {correlation_coef:.2f}\nP-value: {p_value:.3e}\nR^2: {r_squared:.2f}'
+    plt.text(0.05, 0.95, stats_text, transform=plt.gca().transAxes, fontsize=9, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    plt.title('Daily Headline Scores vs. VIX Close')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('scores_vs_vix_close_with_line_and_stats.png')
+    plt.close()
+    
+    # Create PDF report
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Daily Headline Scores vs. VIX Close Report with Correlation Line and Statistics", ln=True, align='C')
+    pdf.image('scores_vs_vix_close_with_line_and_stats.png', x=10, y=20, w=180)
+    pdf.output("report_scores_vs_vix_with_line_and_stats.pdf")
 
 def main():
-    calculate_correlation_and_plot(DB, VIX_CSV)
+    adjusted_daily_scores = adjust_and_aggregate_scores()
+    vix_data = read_vix_data()
+    correlated_data = correlate_data(adjusted_daily_scores, vix_data)
+    generate_plots_and_reports(correlated_data)
+
+    print("Correlation analysis and report have been generated.")
 
 if __name__ == "__main__":
     main()
