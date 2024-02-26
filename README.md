@@ -1,12 +1,22 @@
-# Project Overview
+# NewsVestor Analytics: Unveiling the Impact of WSJ Headlines on Market Volatility
 
-This project aims to explore the relationship between news headlines and stock market fluctuations, specifically focusing on the impact of The Wall Street Journal (WSJ) headlines on stock index prices such as the VIX index. By leveraging OpenAI's ChatGPT-4 Turbo, the project develops a systematic approach to analyze how specific news events correlate with changes in stock market volatility and investor sentiment.
+## Project Overview
+
+This project aims to explore the relationship between news headlines and stock market fluctuations. While initially focusing on the significant influence of The Wall Street Journal (WSJ) headlines, our scope extends to encompass a wider array of news sources. This inclusive approach allows us to capture a broader spectrum of market sentiments and their impacts on stock index prices, particularly the VIX index. Leveraging the advanced capabilities of OpenAI's ChatGPT-4 Turbo, NewsVestor Analytics employs a systematic methodology to unravel the correlation between diverse news events and shifts in stock market volatility and investor sentiment.
+
 
 ## Methodology
 
-The process begins with collecting a dataset of news headlines from the WSJ archive. These headlines serve as input for generating prompts to ChatGPT-4 Turbo, designed to assess the potential impact of each headline on stock market prices. The analysis utilizes a specialized prompt format, which asks the model to predict the direction and magnitude of stock price changes on a scale from 1 to 100 based on the content of the news headline. 
+For each headline, ChatGPT-4 assigns an impact score from 1 to 100, where:
+- **50** means the news is neutral, with no expected impact on stock prices.
+- **Scores above 50** indicate a positive impact, predicting a potential increase in stock prices.
+- **Scores below 50** signal a negative impact, suggesting a possible decrease in stock prices.
 
-The project further involves a statistical analysis phase, where the generated impact scores from ChatGPT-4 Turbo are correlated with actual market data, specifically the VIX index metrics. This analysis aims to identify patterns and quantify the relationship between news sentiment and market volatility.
+This straightforward scoring system quantifies the potential influence of news on market dynamics, serving as a foundation for correlating these predictions with actual market behavior.
+
+## Correlation Analysis Documentation
+
+For a detailed explanation of the correlation analysis methodology and findings, refer to the [Correlation Analysis Documentation](documentation/correlation_analysis.md).
 
 ## Configuration Instructions
 
@@ -88,7 +98,6 @@ python correlation_analysis.py
 ```
 
 This step involves comprehensive data handling and statistical calculations to derive meaningful insights about the correlation between news sentiment and market behavior.
-
 
 ## Specialized ChatGPT Prompt
 
