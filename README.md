@@ -2,21 +2,21 @@
 
 ## Project Overview
 
-This project aims to explore the relationship between news headlines and stock market fluctuations. While initially focusing on the significant influence of The Wall Street Journal (WSJ) headlines, our scope extends to encompass a wider array of news sources. This inclusive approach allows us to capture a broader spectrum of market sentiments and their impacts on stock index prices, particularly the VIX index. Leveraging the advanced capabilities of OpenAI's ChatGPT-4 Turbo, NewsVestor Analytics employs a systematic methodology to unravel the correlation between diverse news events and shifts in stock market volatility and investor sentiment.
+This project aims to explore the relationship between news headlines and stock market fluctuations. While initially focusing on the significant influence of The Wall Street Journal (WSJ) headlines, our scope extends to encompass a wider array of news sources. This inclusive approach allows us to capture a broader spectrum of market sentiments and their impacts on stock index prices, particularly the VIX index. Leveraging the advanced capabilities of OpenAI's ChatGPT-4 Turbo, NewsVestor Analytics employs a systematic methodology to unravel the correlation between diverse news events and shifts in stock market volatility and investor sentiment. Our project extends the insights from "ChatGPT, Stock Market Predictability and Links to the Macroeconomy" by Chen, Tang, Zhou, and Zhu, employing advanced AI to explore the broader impact of news on stock market fluctuations. This work serves as a foundational pillar for our analysis.
 
 
 ## Methodology
 
 For each headline, ChatGPT-4 assigns an impact score from 1 to 100, where:
-- **50** means the news is neutral, with no expected impact on stock prices.
-- **Scores above 50** indicate a positive impact, predicting a potential increase in stock prices.
-- **Scores below 50** signal a negative impact, suggesting a possible decrease in stock prices.
+- **50** means the news is neutral, with no expected impact in the VIX.
+- **Scores above 50** indicate a positive impact, predicting a potential increase in the VIX.
+- **Scores below 50** signal a negative impact, suggesting a possible decrease in the VIX.
 
 This straightforward scoring system quantifies the potential influence of news on market dynamics, serving as a foundation for correlating these predictions with actual market behavior.
 
 ## Correlation Analysis Documentation
 
-For a detailed explanation of the correlation analysis methodology and findings, refer to the [Correlation Analysis Documentation](documentation/correlation_analysis.md).
+For a detailed explanation of the correlation analysis methodology, refer to the [Correlation Analysis Documentation](documentation/correlation_analysis.md).
 
 ## Configuration Instructions
 
