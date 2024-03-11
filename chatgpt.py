@@ -31,10 +31,10 @@ GPT_MODEL = "gpt-4-0125-preview" # "gpt-3.5-turbo"
 STOCK_INDEX = "CBOE Volatility Index"
 TOKEN_COST_1_INPUT = Decimal("0.00001")  # Dollar
 TOKEN_COST_1_OUTPUT = Decimal("0.00003")
-GPT_RETRY_WRONG_OUTPUT_LIMIT = 1000
+GPT_RETRY_WRONG_OUTPUT_LIMIT = 200
 DB = "headlines.db"
 GPT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
-GPT_REQUESTS_PER_MINUTE = 3
+GPT_REQUESTS_PER_MINUTE = 250
 getcontext().prec = 22
 request_counters = {
     "limit_requests": 60,
@@ -245,12 +245,12 @@ def num_tokens_from_string(string: str) -> int:
 
 
 def calculate_cost(input_message: list, output_text: str) -> Decimal:
-    if args.verbose:
-        print("Em: ", "calculate_cost")
     input_cost = num_tokens_from_messages(input_message) * TOKEN_COST_1_INPUT
     output_cost = num_tokens_from_string(output_text) * TOKEN_COST_1_OUTPUT
 
     total_cost = input_cost + output_cost
+    if args.verbose:
+        print(f"total_cost = {total_cost}")
     return total_cost
 
 
@@ -312,13 +312,13 @@ def is_response_ok(completion):
 def main():
     cost = Decimal("0")
     done_count = 0
+    retry_count_wrong_output = 0
 
     with sqlite3.connect(DB) as conn:
         cursor = conn.cursor()
         for id, year, month, headline in get_headlines_by_year(cursor):
             if args.verbose:
                 print("Em: ", "for id, year, month, headline")
-            retry_count_wrong_output = 0
             while True:
                 input_text = f"Forget all previous instructions. You are now a financial expert analyzing the stock market in {month}/{year}. Upon receiving a news headline, assess its impact on {STOCK_INDEX} prices. Predict whether the headline suggests a rise or drop in prices by providing a number on a scale from 1 to 100, where 1 signifies a significant decrease, 100 signifies a significant increase, and 50 indicates uncertainty. Your response should be limited to this numerical prediction only, based on the given headline: {headline}"
                 messages = [{"role": "system", "content": input_text}]
@@ -365,7 +365,8 @@ def count_rows_in_headlines():
 
 def calculate_db_cost():
     cost = Decimal("0")
-    tokens = 0
+    tokens_output = 0
+    tokens_input = 0
     total_headlines = count_rows_in_headlines()
     remaining_headlines = total_headlines
     with sqlite3.connect(DB) as conn:
@@ -373,12 +374,13 @@ def calculate_db_cost():
         for id, year, month, headline in get_headlines_by_year(cursor):
             input_text = f"Forget all previous instructions. You are now a financial expert analyzing the stock market in {month}/{year}. Upon receiving a news headline, assess its impact on {STOCK_INDEX} prices. Predict whether the headline suggests a rise or drop in prices by providing a number on a scale from 1 to 100, where 1 signifies a significant decrease, 100 signifies a significant increase, and 50 indicates uncertainty. Your response should be limited to this numerical prediction only, based on the given headline: {headline}"
             cost += calculate_cost([{"role": "system", "content": input_text}], "100")
-            tokens += num_tokens_from_messages(
-                [{"role": "system", "content": headline}]
-            ) + num_tokens_from_string("100")
+            tokens_input += num_tokens_from_messages(
+                [{"role": "system", "content": input_text}]
+            )
+            tokens_output += num_tokens_from_string("100")
             remaining_headlines -= 1
             print(
-                f"\rtotal_headlines: '{total_headlines}', remaining_headlines: {remaining_headlines}, model: '{GPT_MODEL}', total_cost: '{cost}', total_tokens: '{tokens}'", end=''
+                f"\rtotal_headlines: '{total_headlines}', remaining_headlines: {remaining_headlines}, model: '{GPT_MODEL}', total_cost: '{cost}', tokens_input: '{tokens_input}', tokens_output: '{tokens_output}'", end=''
             )
 
 def test():
